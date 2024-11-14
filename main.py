@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import ebooklib
 import ebooklib.epub
 from bs4 import BeautifulSoup
@@ -21,9 +22,14 @@ def replace_word_in_epub(epub_path, output_path, word_to_replace, replacement_wo
 def find_replace_in_text_nodes(html: str, search: str, replace: str) -> str:
     soup = BeautifulSoup(html, 'html.parser')
 
+    # Compile the regex pattern with word boundaries for case-sensitive replacement
+    # Use re.escape to escape special characters in search string
+    pattern = r'\b' + re.escape(search) + r'\b'
+
     for element in soup.find_all(string=True):
-        if element.strip() and search in element:
-            updated_text = element.replace(search, replace)
+        if element.strip():
+            # Replace occurrences of the exact word with the new word
+            updated_text = re.sub(pattern, replace, element)
             element.replace_with(updated_text)
 
     return str(soup)

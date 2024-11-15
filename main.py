@@ -139,7 +139,7 @@ def main():
         "in_strs", help="In-order, comma-delimited list of words to search for in the EPUB content")
     parser.add_argument(
         "out_strs", help="In-order, comma-delimited list of words to replace the search words with in the EPUB content")
-    parser.add_argument("--out_path", default=None,
+    parser.add_argument("--out", default=None,
                         help="Path to save the output EPUB file (default: 'out.' + in_path)")
 
     args = parser.parse_args()
@@ -147,7 +147,7 @@ def main():
     in_list, out_list = prepare_in_out_replacement_lists(
         args.in_strs, args.out_strs)
 
-    if not args.out_path:
+    if not args.out:
         filename = os.path.basename(args.in_path)
         filename = filename.split("out.")[-1]
         name, ext = os.path.splitext(filename)

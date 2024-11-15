@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 
 def replace_word_in_epub(epub_path, output_path, word_to_replace, replacement_word):
-    extracted_dir = 'extracted_epub'
+    extracted_dir = '_extracted_epub'
     if os.path.exists(extracted_dir):
         shutil.rmtree(extracted_dir)
     os.makedirs(extracted_dir)
@@ -20,14 +20,13 @@ def replace_word_in_epub(epub_path, output_path, word_to_replace, replacement_wo
             if file.endswith(('.xhtml', '.html')):
                 file_path = os.path.join(root, file)
 
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    html_content = f.read()
+                with open(file_path, "r+", encoding='utf-8') as f:
+                    updated_content = find_replace_in_text_nodes(
+                        f.read(), word_to_replace, replacement_word)
 
-                updated_content = find_replace_in_text_nodes(
-                    html_content, word_to_replace, replacement_word)
-
-                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.seek(0)
                     f.write(updated_content)
+                    f.truncate()
 
     # After replacements are complete, compress back to epub
     with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:

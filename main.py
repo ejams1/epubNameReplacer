@@ -1,29 +1,51 @@
 import argparse
 import os
 import re
-import ebooklib
-import ebooklib.epub
+import zipfile
+import shutil
 from bs4 import BeautifulSoup
 
 
 def replace_word_in_epub(epub_path, output_path, word_to_replace, replacement_word):
-    book = ebooklib.epub.read_epub(epub_path)
+    extracted_dir = 'extracted_epub'
+    if os.path.exists(extracted_dir):
+        shutil.rmtree(extracted_dir)
+    os.makedirs(extracted_dir)
 
-    for item in book.get_items():
-        if item.get_type() == ebooklib.ITEM_DOCUMENT:
-            html_content = item.content.decode('utf-8')
+    with zipfile.ZipFile(epub_path, 'r') as zip_ref:
+        zip_ref.extractall(extracted_dir)
 
-            item.content = find_replace_in_text_nodes(
-                html_content, word_to_replace, replacement_word).encode('utf-8')
+    for root, dirs, files in os.walk(extracted_dir):
+        for file in files:
+            if file.endswith(('.xhtml', '.html')):
+                file_path = os.path.join(root, file)
 
-    ebooklib.epub.write_epub(output_path, book)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+
+                updated_content = find_replace_in_text_nodes(
+                    html_content, word_to_replace, replacement_word)
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(updated_content)
+
+    # After replacements are complete, compress back to epub
+    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
+        for root, dirs, files in os.walk(extracted_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Preserve directory structure
+                arcname = os.path.relpath(file_path, extracted_dir)
+                zip_ref.write(file_path, arcname)
+
+    # Clean up
+    shutil.rmtree(extracted_dir)
 
 
 def find_replace_in_text_nodes(html: str, search: str, replace: str) -> str:
     soup = BeautifulSoup(html, 'html.parser')
 
     # Compile the regex pattern with word boundaries for case-sensitive replacement
-    # Use re.escape to escape special characters in search string
     pattern = r'\b' + re.escape(search) + r'\b'
 
     for element in soup.find_all(string=True):

@@ -6,7 +6,7 @@ import shutil
 from lxml import etree
 
 
-def apply_replacements(extracted_dir: str, word_to_replace, replacement_word) -> None:
+def apply_replacements(extracted_dir: str, searches: list[str], replaces: list[str]) -> None:
     for root, dirs, files in os.walk(extracted_dir):
         for file in files:
             if file.endswith(('.xhtml')):
@@ -24,7 +24,7 @@ def apply_replacements(extracted_dir: str, word_to_replace, replacement_word) ->
 
                     # Perform replacements on text nodes
                     updated_content = find_replace_in_text_nodes(
-                        tree, word_to_replace, replacement_word)
+                        tree, searches, replaces)
 
                     # Add back the XML declaration and doctype to make it valid XHTML again
                     updated_content = add_xml_and_doctype(updated_content)
@@ -81,10 +81,10 @@ def compress_epub(output_path: str, extracted_dir: str) -> None:
                     zip_ref.write(file_path, arcname)
 
 
-def replace_word_in_epub(epub_path: str, output_path: str, word_to_replace: str, replacement_word: str) -> None:
+def replace_word_in_epub(epub_path: str, output_path: str, searches: list[str], replaces: list[str]) -> None:
     extracted_dir = extract_epub(epub_path)
 
-    apply_replacements(extracted_dir, word_to_replace, replacement_word)
+    apply_replacements(extracted_dir, searches, replaces)
 
     compress_epub(output_path, extracted_dir)
 
@@ -92,35 +92,60 @@ def replace_word_in_epub(epub_path: str, output_path: str, word_to_replace: str,
     shutil.rmtree(extracted_dir)
 
 
-def find_replace_in_text_nodes(tree: etree._Element, search: str, replace: str) -> str:
+def find_replace_in_text_nodes(tree: etree._Element, searches: list[str], replaces: list[str]) -> str:
     for element in tree.iter():
         if element.text:
-            updated_text = re.sub(
-                r'\b' + re.escape(search) + r'\b', replace, element.text)
-            element.text = updated_text
+            # Iterate on find/replace index - they will always be the same length
+            for i in range(len(searches)):
+                updated_text = re.sub(
+                    r'\b' + re.escape(searches[i]) + r'\b', replaces[i], element.text)
+                element.text = updated_text
 
         # Also check tail text (text after the element itself)
         if element.tail:
-            updated_tail = re.sub(
-                r'\b' + re.escape(search) + r'\b', replace, element.tail)
-            element.tail = updated_tail
+            for i in range(len(searches)):
+                updated_tail = re.sub(
+                    r'\b' + re.escape(searches[i]) + r'\b', replaces[i], element.tail)
+                element.tail = updated_tail
 
     # Return the modified XML as a string
     return etree.tostring(tree, encoding='utf-8', method='xml').decode('utf-8')
 
 
+def prepare_in_out_replacement_lists(in_str: str, out_str: str):
+    # Split in/out strings into ordered lists
+    in_list = in_str.split(',')
+    in_len = len(in_list)
+    out_list = out_str.split(',')
+    out_len = len(out_list)
+
+    if in_len == out_len:
+        return in_list, out_list
+
+    # If only one string is provided for input but multiple outputs are provided, replace all outputs
+    # with the given input
+    if in_len == 1 and out_len > 1:
+        return in_list * out_len, out_list
+
+    raise Exception(
+        "Unsupported combination of input/output, please try again")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Replace words in an EPUB file.")
+        description="Replace words in an EPUB file. Can accept one of the following combinations of inputs and outputs:\nn,n\nn,1\n\n")
     parser.add_argument("in_path", help="Path to the input EPUB file")
     parser.add_argument(
-        "in_str", help="Word to search for in the EPUB content")
+        "in_strs", help="In-order, comma-delimited list of words to search for in the EPUB content")
     parser.add_argument(
-        "out_str", help="Word to replace the search word with in the EPUB content")
+        "out_strs", help="In-order, comma-delimited list of words to replace the search words with in the EPUB content")
     parser.add_argument("--out_path", default=None,
                         help="Path to save the output EPUB file (default: 'out.' + in_path)")
 
     args = parser.parse_args()
+
+    in_list, out_list = prepare_in_out_replacement_lists(
+        args.in_strs, args.out_strs)
 
     if not args.out_path:
         filename = os.path.basename(args.in_path)
@@ -129,7 +154,7 @@ def main():
         args.out_path = f"out.{name}{ext}"
 
     replace_word_in_epub(args.in_path, args.out_path,
-                         args.in_str, args.out_str)
+                         in_list, out_list)
 
 
 if __name__ == "__main__":
